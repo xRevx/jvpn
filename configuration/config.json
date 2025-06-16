@@ -1,0 +1,11 @@
+{
+  "server": {
+    "ip": "1.1.1.1",
+    "port": 80
+  },
+  "encryption_key": "0xAA",
+  "log_file": "path/to/log/file",
+  "timeout": 10,
+  "reconnection": 200,
+  "bridged_interface": "ens33"
+}
