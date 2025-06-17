@@ -11,6 +11,7 @@ class VPNConfig:
         self.timeout = data.get('timeout')
         self.reconnection = data.get('reconnection')
         self.bridged_interface = data.get('bridged_interface')
+        self.tap_name = data.get('tap_name')
 
     @classmethod
     def build_json(cls, path):
@@ -34,5 +35,6 @@ class VPNConfig:
             f"  timeout={self.timeout},\n"
             f"  reconnection={self.reconnection},\n"
             f"  bridged_interface='{self.bridged_interface}'\n"
+            f"  tap_name='{self.tap_name}'\n"
             ")"
         )

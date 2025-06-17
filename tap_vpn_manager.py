@@ -11,32 +11,24 @@ class TapVPNManager:
     def __init__(self):
         self.ipr = IPRoute()
 
-    def create_tap(self, name):
-        # Ensure TUN/TAP driver is loaded
+    def create_tap(self, name: str) -> int:
+        """Creates a TAP interface and returns its file descriptor."""
         if not os.path.exists('/dev/net/tun'):
             raise RuntimeError("/dev/net/tun not found. Is the TUN/TAP driver loaded?")
 
+        # Create the TAP interface using pyroute2
         try:
-            # Create TAP interface using pyroute2
-            self.ipr.link('add',
-                          ifname=name,
-                          kind='tuntap',
-                          mode='tap',
-                          user=os.getuid())
-
-            # Bring it UP
-            idx = self.ipr.link_lookup(ifname=name)[0]
-            self.ipr.link('set', index=idx, state='up')
-
-            # Open /dev/net/tun to attach to the tap (makes carrier appear)
-            tun_fd = os.open('/dev/net/tun', os.O_RDWR)
-            ifr = struct.pack('16sH', name.encode('utf-8'), IFF_TAP | IFF_NO_PI)
-            fcntl.ioctl(tun_fd, TUNSETIFF, ifr)
-
-            print(f"TAP interface '{name}' created, activated, and ready.")
-            return tun_fd  # Return the file descriptor if you'll use it
+            self.ipr.link("add", ifname=name, kind="tuntap", mode="tap", user=os.getuid())
+            self.ipr.link("set", index=self.ipr.link_lookup(ifname=name)[0], state="up")
+            print(f"[+] TAP interface '{name}' created and brought up.")
         except NetlinkError as e:
             raise RuntimeError(f"Failed to create TAP: {e}")
+
+        # Open the interface for reading/writing
+        fd = os.open("/dev/net/tun", os.O_RDWR | os.O_NONBLOCK)
+        ifr = struct.pack("16sH", name.encode(), IFF_TAP | IFF_NO_PI)
+        fcntl.ioctl(fd, TUNSETIFF, ifr)
+        return fd
 
     def create_bridge(self, bridge_name, nic_name, tap_name):
         try:
