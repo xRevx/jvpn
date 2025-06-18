@@ -1,15 +1,15 @@
 import argparse
 import asyncio
+import sys
 
-from capsulation.cipher import xor_cipher
 from configuration.vpn_config import VPNConfig
-from connection.client import VPNClient
-from connection.server import VPNServer
+from connection.server import VPNPeer
 from tap_vpn_manager import TapVPNManager
 
+BRIDGE_NAME = "br0"
 
 def load_config_from_args() -> VPNConfig:
-    parser = argparse.ArgumentParser(description="Start the VPN client/server.")
+    parser = argparse.ArgumentParser(description="Start the VPN peer.")
     parser.add_argument("config", help="Path to the VPN config file (JSON or YAML)")
     args = parser.parse_args()
 
@@ -21,24 +21,36 @@ def load_config_from_args() -> VPNConfig:
     else:
         raise ValueError("Unsupported config file type. Use .json or .yaml")
 
-async def main():
-    config = load_config_from_args()
-    print(config.server_ip)
-
+def setup_interfaces(config: VPNConfig):
     manager = TapVPNManager()
-    manager.delete_interface("tap0")
-    manager.delete_interface("br0")
-    #client ens33 server ens37 bridge
+
+    # Try to delete any stale TAP/bridge first
+    manager.delete_interface(config.tap_name)
+    manager.delete_interface(BRIDGE_NAME)
+
     tap_fd = manager.create_tap(config.tap_name)
-    manager.create_bridge("br0", config.bridged_interface ,config.tap_name)
+    manager.create_bridge(BRIDGE_NAME, config.bridged_interface, config.tap_name)
 
-    server = VPNServer(config=config, tap_fd=tap_fd)
-    client = VPNClient(config=config, tap_fd=tap_fd)
+    return tap_fd, manager
 
-    await asyncio.gather(
-        server.run(),
-        client.run()
-    )
+async def run_peer(config, tap_fd):
+    peer = VPNPeer(config=config, tap_fd=tap_fd)
+    await peer.run()
 
-if __name__ == '__main__':
-    asyncio.run(main())
+def main():
+    config = load_config_from_args()
+    tap_fd, manager = setup_interfaces(config)
+
+    try:
+        asyncio.run(run_peer(config, tap_fd))
+    except KeyboardInterrupt:
+        print("\n[!] Caught KeyboardInterrupt. Cleaning up...")
+        manager.cleanup(config,tap_fd, BRIDGE_NAME)
+        sys.exit(0)
+    except Exception as e:
+        print(f"[!] Unexpected error: {e}")
+        manager.cleanup(config, tap_fd, BRIDGE_NAME)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

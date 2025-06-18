@@ -8,5 +8,9 @@
   "timeout": 10,
   "reconnection": 200,
   "bridged_interface": "ens33",
-  "tap_name": "tap0"
+  "tap_name": "tap0",
+  "host_server": {
+    "ip": "1.1.1.2",
+    "port": 1194
+  }
 }

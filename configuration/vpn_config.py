@@ -6,6 +6,10 @@ class VPNConfig:
         server = data.get('server', {})
         self.server_ip = server.get('ip')
         self.server_port = server.get('port')
+
+        host_server = data.get('host_server', {})
+        self.host_server_ip = host_server.get('ip')
+        self.host_server_port = host_server.get('port')
         self.encryption_key = int(data.get('encryption_key', '0'), 16)
         self.log_file = data.get('log_file')
         self.timeout = data.get('timeout')
