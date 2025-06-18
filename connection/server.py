@@ -23,8 +23,7 @@ class VPNPeer:
         while True:
             try:
                 data, addr = await asyncio.to_thread(self.sock.recvfrom, 2048)
-                decrypted = data
-                #decrypted = xor_cipher(data, self.config.encryption_key)
+                decrypted = xor_cipher(data, self.config.encryption_key)
                 os.write(self.tap_fd, decrypted)
             except BlockingIOError:
                 await asyncio.sleep(0.01)  # Avoid tight loop on empty recv
@@ -37,7 +36,7 @@ class VPNPeer:
         while True:
             try:
                 data = await asyncio.to_thread(os.read, self.tap_fd, 2048)
-                encrypted =  data #xor_cipher(data, self.config.encryption_key)
+                encrypted = xor_cipher(data, self.config.encryption_key)
                 await asyncio.to_thread(self.sock.sendto, encrypted, self.peer_addr)
                 print(f"sent to {self.peer_addr[0]} {encrypted}")
             except Exception as e:
