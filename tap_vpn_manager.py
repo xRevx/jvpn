@@ -3,6 +3,10 @@ import fcntl
 import struct
 from pyroute2 import IPRoute, NetlinkError
 
+from logger import log
+
+from configuration.vpn_config import VPNConfig
+
 TUNSETIFF = 0x400454ca
 IFF_TAP = 0x0002
 IFF_NO_PI = 0x1000
@@ -32,8 +36,7 @@ class TapVPNManager:
             tun_fd = os.open('/dev/net/tun', os.O_RDWR)
             ifr = struct.pack('16sH', name.encode('utf-8'), IFF_TAP | IFF_NO_PI)
             fcntl.ioctl(tun_fd, TUNSETIFF, ifr)
-
-            print(f"TAP interface '{name}' created, activated, and ready.")
+            log("Creating tap",f"TAP interface '{name}' created, activated, and ready.")
             return tun_fd  # Return the file descriptor if you'll use it
         except NetlinkError as e:
             raise RuntimeError(f"Failed to create TAP: {e}")
@@ -44,21 +47,35 @@ class TapVPNManager:
             self.ipr.link('add', ifname=bridge_name, kind='bridge')
             bridge_idx = self.ipr.link_lookup(ifname=bridge_name)[0]
             self.ipr.link('set', index=bridge_idx, state='up')
-            print(f"Bridge '{bridge_name}' created and brought up.")
+            log("Creating bridge",f"Bridge '{bridge_name}' created and brought up.")
 
             # Add NIC and TAP to bridge
             for dev in [nic_name, tap_name]:
                 idx = self.ipr.link_lookup(ifname=dev)[0]
                 self.ipr.link('set', index=idx, master=bridge_idx)
-                print(f"Interface '{dev}' added to bridge '{bridge_name}'.")
+                log("Creating bridge", f"Interface '{dev}' added to bridge '{bridge_name}'.")
         except NetlinkError as e:
             raise RuntimeError(f"Failed to set up bridge: {e}")
+
+
+    def setup_interfaces(self, config: VPNConfig, bridge_name: str):
+        """Setup TAP and bridge interfaces based on the provided config."""
+
+        log("Setting up interfaces", f"")
+        # Try to delete any stale TAP/bridge first
+        self.delete_interface(config.tap_name)
+        self.delete_interface(bridge_name)
+
+        tap_fd = self.create_tap(config.tap_name)
+        self.create_bridge(bridge_name, config.bridged_interface, config.tap_name)
+
+        return tap_fd
 
     def delete_interface(self, name):
         try:
             idx = self.ipr.link_lookup(ifname=name)[0]
             self.ipr.link('del', index=idx)
-            print(f"Interface '{name}' deleted.")
+            log("Deleting interface", f'{name}')
         except IndexError:
             print(f"Interface '{name}' not found.")
         except NetlinkError as e:
@@ -67,18 +84,19 @@ class TapVPNManager:
     def cleanup(self, config, tap_fd, bridge_name):
         try:
             os.close(tap_fd)
-            print("TAP file descriptor closed.")
+            log("Clean up", "TAP file descriptor closed.")
         except Exception as e:
-            print(f"Failed to close TAP FD: {e}")
+            log("Clean up", f"Failed to close TAP FD: {e}")
 
         try:
             self.delete_interface(bridge_name)
-            print("Bridge deleted.")
+            log("Clean up", "Bridge deleted.")
+
         except Exception as e:
-            print(f"Failed to delete bridge: {e}")
+            log("Clean up", f"Failed to delete bridge: {e}")
 
         try:
             self.delete_interface(config.tap_name)
-            print("TAP interface deleted.")
+            log("Clean up", "TAP interface deleted.")
         except Exception as e:
-            print(f"Failed to delete TAP: {e}")
+            log("Clean up", f"Failed to delete TAP: {e}")

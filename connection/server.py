@@ -1,6 +1,7 @@
 import asyncio
 import os
 import socket
+from logger import log, log_error
 
 from configuration.vpn_config import VPNConfig
 from capsulation.cipher import xor_cipher
@@ -20,6 +21,8 @@ class VPNPeer:
         self.sock.bind(('0.0.0.0', self.config.host_server_port))
 
     async def _receive_loop(self):
+        log("Loops", f"Starting to listen on packets from server {self.config.server_ip}")
+
         while True:
             try:
                 data, addr = await asyncio.to_thread(self.sock.recvfrom, 2048)
@@ -28,7 +31,7 @@ class VPNPeer:
             except BlockingIOError:
                 await asyncio.sleep(0.01)  # Avoid tight loop on empty recv
             except Exception as e:
-                print(f"[!] Receive error: {e}")
+                log_error("Receive", f"Receive error: {e}")
                 await asyncio.sleep(0.01)
 
     async def _send_loop(self):
@@ -40,7 +43,8 @@ class VPNPeer:
                 await asyncio.to_thread(self.sock.sendto, encrypted, self.peer_addr)
                 print(f"sent to {self.peer_addr[0]} {encrypted}")
             except Exception as e:
-                print(f"[!] Send loop error: {e}")
+                log_error("Send", f"Send error: {e}")
+
 
     async def run(self):
         self._create_udp_socket()

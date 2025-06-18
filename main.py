@@ -2,8 +2,10 @@ import argparse
 import asyncio
 import sys
 
+import logger
 from configuration.vpn_config import VPNConfig
 from connection.server import VPNPeer
+from logger import log_error, set_log_file, log
 from tap_vpn_manager import TapVPNManager
 
 BRIDGE_NAME = "br0"
@@ -21,25 +23,18 @@ def load_config_from_args() -> VPNConfig:
     else:
         raise ValueError("Unsupported config file type. Use .json or .yaml")
 
-def setup_interfaces(config: VPNConfig):
-    manager = TapVPNManager()
-
-    # Try to delete any stale TAP/bridge first
-    manager.delete_interface(config.tap_name)
-    manager.delete_interface(BRIDGE_NAME)
-
-    tap_fd = manager.create_tap(config.tap_name)
-    manager.create_bridge(BRIDGE_NAME, config.bridged_interface, config.tap_name)
-
-    return tap_fd, manager
-
 async def run_peer(config, tap_fd):
     peer = VPNPeer(config=config, tap_fd=tap_fd)
     await peer.run()
 
 def main():
     config = load_config_from_args()
-    tap_fd, manager = setup_interfaces(config)
+    set_log_file(config.log_file)
+    print(f"Log file path: {config.log_file}")
+    log("VPN started", "Loaded config")
+    logger.log("VPN started", "Loaded config")
+    manager = TapVPNManager()
+    tap_fd = manager.setup_interfaces(config, BRIDGE_NAME)
 
     try:
         asyncio.run(run_peer(config, tap_fd))
@@ -48,7 +43,7 @@ def main():
         manager.cleanup(config,tap_fd, BRIDGE_NAME)
         sys.exit(0)
     except Exception as e:
-        print(f"[!] Unexpected error: {e}")
+        log_error("main",f"Unexpected error: e")
         manager.cleanup(config, tap_fd, BRIDGE_NAME)
         sys.exit(1)
 
